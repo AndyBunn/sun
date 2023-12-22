@@ -37,6 +37,7 @@ daylength <- function(lat, long, jd, tmz)
   }
   EqTime = eqtime(jd)
   delta = declination(jd)
+  latRads <- lat * (pi/180.0)
   tanlatdel = -tan(radians(lat)) * tan(radians(delta))
   tanlatdel[tanlatdel > 1] = 1
   omega = acos(tanlatdel)
@@ -58,42 +59,58 @@ todayDatePOS <- as.POSIXct(todayDate)
 dateVecPOS <- as.POSIXct(dateVec)
 dateVecJD <- JD(dateVecPOS)
 
-dat <- daylength(lat = 48.75,long = 122.48,jd = dateVecJD,tmz = -1)
+lat2get <- 48.75
+long2get <- 122.48
+
+dat <- daylength(lat = lat2get,long = long2get,jd = dateVecJD,tmz = -1)
 dat <- as.data.frame(dat)
 names(dat) <- c("sunrise","sunset","day.length")
 # use Date rather than POSIXct for plotting
 dat$Date <- dateVec
 dat$JD <- dateVecJD
-mean(dat$day.length)
-
 
 dat$day.delta <- c(NA,diff(dat$day.length)/diff(dat$JD) * 60)
+todayDF <- data.frame(todayDate = todayDate,
+                      todayDayLength = dat$day.length[dat$Date == todayDate],
+                      todayDayDelta = dat$day.delta[dat$Date == todayDate])
+todayDF
 
-today <- format(Sys.Date(),format="%Y-%m-%d")
-todayDL <- round(dat$day.length[dat$Date == Sys.Date()],1)
-todayDD <- round(dat$day.delta[dat$Date == Sys.Date()],1)
+arrowDF <- data.frame(todayDate = c(todayDF$todayDate-20,todayDF$todayDate+20),
+                      todayDayLength = c(todayDF$todayDayLength - (todayDF$todayDayDelta/60),
+                                         todayDF$todayDayLength + todayDF$todayDayDelta/60))
 
-dat$Date[dat$Date == Sys.Date()]
 
-pDayLength <- ggplot(data=dat,aes(x=Date,y=day.length)) +
+
+# labels
+todayLab <- format(todayDate,format="%Y-%m-%d")
+todayLengthLab <- round(todayDF$todayDayLength,1)
+todayDeltaLab <- round(todayDF$todayDayDelta,0)
+
+pDayLength <- ggplot() +
   geom_hline(yintercept = 12,linetype = "dotted") +
-  geom_line() +
-  geom_vline(xintercept = Sys.Date(),color="blue",linetype = "dashed") +
-  labs(y="Day Length (Hours)",title = paste(today,"48.75 N",sep=", ")) +
-  scale_x_date(date_breaks = "months",date_labels = "%b",expand = c(0,0)) +
-  annotate(geom = "text", max(dat$day.length), x=Sys.Date()-5,
-           label=paste(todayDL, "hr"),hjust=1) +
+  geom_line(data=dat,aes(x=Date,y=day.length)) +
+  geom_point(data=todayDF,aes(x=todayDate,y=todayDayLength),
+             color="blue",size=3,alpha=0.5) +
+  geom_segment(data=arrowDF,aes(x=todayDate[1],
+                                y=todayDayLength[1],
+                                xend = todayDate[2],
+                                yend = todayDayLength[2]),
+               color = "blue",
+               arrow = arrow(length = unit(0.2, "cm"),angle = 30)) +
+  labs(y="Day Length (Hours)",x=element_blank(),
+       title = paste0(todayLab, " Latitude ", lat2get),
+  subtitle = paste0("Day Length: ",todayLengthLab," Hours, Delta: ", todayDeltaLab, " Minutes")) +
+scale_x_date(date_breaks = "months",date_labels = "%b",expand = c(0,0)) +
   theme_minimal()
 
 pDayLength
 
-pDayLengthDelta <- ggplot(data=dat,aes(x=Date,y=day.delta)) +
+pDayLengthDelta <- ggplot() +
   geom_hline(yintercept = 0,linetype = "dotted") +
-  geom_line() +
-  geom_vline(xintercept = Sys.Date(),color="blue",linetype = "dashed") +
-  annotate(geom = "text", max(dat$day.delta,na.rm = TRUE), x=Sys.Date()-5,
-                    label=paste(todayDD,"min"),hjust=1) +
-  labs(y="Difference (Min.)",title = "") +
+  geom_line(data=dat,aes(x=Date,y=day.delta)) +
+  geom_vline(xintercept = todayDate,color="blue",linetype = "dashed") +
+  labs(y="Difference (Min.)",x=element_blank(),
+       title = "",subtitle="") +
   scale_x_date(date_breaks = "months",date_labels = "%b",expand = c(0,0)) +
   theme_minimal()
 
@@ -103,7 +120,7 @@ pDayLengthDelta
 png(filename = paste0("dayLength",todayDate,".png"),
     width = 10,height = 5,units = "in",
     res = 256, pointsize = 9)
-  gridExtra::grid.arrange(pDayLength,pDayLengthDelta,ncol=2)
+gridExtra::grid.arrange(pDayLength,pDayLengthDelta,ncol=2)
 dev.off()
 
 #48.75N Con: we only have 8.2hrs of daylight today. 48.75N Pro: we are only losing 20s/d of daylight today. SuperPro: I can see you Solstice. Welcome.
