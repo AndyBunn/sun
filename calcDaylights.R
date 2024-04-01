@@ -1,3 +1,4 @@
+### GFY
 rm(list=ls())
 source("eqtime.R")
 source("declination.R")
